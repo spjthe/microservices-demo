@@ -94,13 +94,6 @@ func main() {
 	}
 	log.Out = os.Stdout
 
-	prometheusExporter, err := prometheus.NewExporter(prometheus.Options{})
-	if err != nil {
-		log.Warnf("failed to initialize Prometheus exporter: %+v", err)
-	} else {
-		initStats(log, prometheusExporter)
-	}
-
 	if os.Getenv("DISABLE_TRACING") == "" {
 		log.Info("Tracing enabled.")
 		go initTracing(log)
@@ -149,7 +142,14 @@ func main() {
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	r.HandleFunc("/robots.txt", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "User-agent: *\nDisallow: /") })
 	r.HandleFunc("/_healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "ok") })
-	r.HandleFunc("/metrics", prometheusExporter.ServeHTTP).Methods(http.MethodGet, http.MethodHead)
+
+	prometheusExporter, err := prometheus.NewExporter(prometheus.Options{})
+	if err != nil {
+		log.Warnf("failed to initialize Prometheus exporter: %+v", err)
+	} else {
+		initStats(log, prometheusExporter)
+		r.HandleFunc("/metrics", prometheusExporter.ServeHTTP).Methods(http.MethodGet, http.MethodHead)
+	}
 
 	var handler http.Handler = r
 	handler = &logHandler{log: log, next: handler} // add logging
